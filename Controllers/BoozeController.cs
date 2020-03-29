@@ -5,8 +5,10 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using api.Models.Response;
+using api.Settings;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -17,6 +19,11 @@ namespace api.Controllers
     public class BoozeController : ControllerBase
     {
         private static readonly HttpClient _httpClient = new HttpClient();
+        private AppSettings _appSettings;
+        public BoozeController(IOptions<AppSettings> appSettings)
+        {
+            _appSettings = appSettings.Value;
+        }
 
         // We will use the public CocktailDB API as our backend
         // https://www.thecocktaildb.com/api.php
@@ -31,10 +38,12 @@ namespace api.Controllers
         {
             var cocktailList = new CocktailList();
 
+            
+
             // TODO - Search the CocktailDB for cocktails with the ingredient given, and return the cocktails
             // https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=Gin
 
-            using (var response = await _httpClient.GetAsync("https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=" + ingredient))
+            using (var response = await _httpClient.GetAsync(_appSettings.filterUrl + ingredient))
             {
                 var listMeta = new ListMeta();
                 string apiResponse = await response.Content.ReadAsStringAsync();
@@ -48,7 +57,7 @@ namespace api.Controllers
                 {
                     // You will need to populate the cocktail details from
                     // https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=11007
-                    using var response1 = await _httpClient.GetAsync("https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=" + rc.idDrink);
+                    using var response1 = await _httpClient.GetAsync(_appSettings.lookupUrl + rc.idDrink);
                     string apiResponse1 = await response1.Content.ReadAsStringAsync();
                     dynamic jsonResult1 = JValue.Parse(apiResponse1);
                     var drink = jsonResult1.drinks[0];
