@@ -18,19 +18,12 @@ namespace api.Controllers
     [ApiController]
     public class BoozeController : ControllerBase
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
-        private AppSettings _appSettings;
-        public BoozeController(IOptions<AppSettings> appSettings)
+        private static readonly HttpClient _httpClient = new HttpClient();  //static HTTPClient object for requests
+        private AppSettings _appSettings;                                   //AppSettings object to access app properties like filter and lookup urls
+        public BoozeController(IOptions<AppSettings> appSettings)           // Constructor for booze controller
         {
-            _appSettings = appSettings.Value;
+            _appSettings = appSettings.Value;                               //initialising appsettings property 
         }
-
-        // We will use the public CocktailDB API as our backend
-        // https://www.thecocktaildb.com/api.php
-        //
-        // Bonus points
-        // - Speed improvements
-        // - Unit Tests
 
         [HttpGet]
         [Route("search-ingredient/{ingredient}")]
@@ -124,7 +117,7 @@ namespace api.Controllers
                             }
                         }
                         listMeta.count = cocktails.Count;
-                        listMeta.medianIngredientCount = (int)totalIngredientcount / listMeta.count;
+                        listMeta.medianIngredientCount = (int)totalIngredientcount / listMeta.count;    // calculating median of number of ingredients
                         cocktailList.meta = listMeta;
                         cocktailList.Cocktails = cocktails;
                     }
@@ -155,10 +148,10 @@ namespace api.Controllers
         {
             var cocktail = new Cocktail();
 
-            using (var response = await _httpClient.GetAsync("https://www.thecocktaildb.com/api/json/v1/1/random.php"))
+            using (var response = await _httpClient.GetAsync(_appSettings.randomUrl))   //getting a random cocktail from random cocktail API
             {
-                string apiResponse = await response.Content.ReadAsStringAsync();
-                dynamic dynamicObject = JsonConvert.DeserializeObject(apiResponse);
+                string apiResponse = await response.Content.ReadAsStringAsync();     
+                dynamic dynamicObject = JsonConvert.DeserializeObject(apiResponse);  //Converting Json string returned from lookup API to dynamic object
                 var drink = dynamicObject.drinks[0];
                 var ingredientList = new List<string>();
                 foreach (var property in drink)
@@ -197,24 +190,24 @@ namespace api.Controllers
             return Ok(cocktail);
         }
 
-        private static bool IsValidJson(string resultString)
+        private static bool IsValidJson(string resultString)  //This method validates the passed JSON String
         {
             resultString = resultString.Trim();
 
 
-            if ((resultString.StartsWith("{") && resultString.EndsWith("}")) ||(resultString.StartsWith("[") && resultString.EndsWith("]")))
+            if ((resultString.StartsWith("{") && resultString.EndsWith("}")) ||(resultString.StartsWith("[") && resultString.EndsWith("]"))) // Check if Json string is encapsulated correctly
             {
                 try
                 {
-                    var obj = JToken.Parse(resultString);
+                    var obj = JToken.Parse(resultString);  //parsing the result string
                     return true;
                 }
-                catch (JsonReaderException jException)
+                catch (JsonReaderException jException)   //catch block for Json reader exception
                 {
                     Console.WriteLine(jException.Message);
                     return false;
                 }
-                catch (Exception e) 
+                catch (Exception e)                  //catch block for all other exceptions
                 {
                     Console.WriteLine(e.ToString());
                     return false;

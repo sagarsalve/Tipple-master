@@ -9,5 +9,6 @@ namespace api.Settings
     {
         public string filterUrl { get; set; }
         public string lookupUrl { get; set; }
+        public string randomUrl { get; set; }
     }
 }
