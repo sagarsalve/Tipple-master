@@ -38,83 +38,112 @@ namespace api.Controllers
         {
             var cocktailList = new CocktailList();
 
-            
 
-            // TODO - Search the CocktailDB for cocktails with the ingredient given, and return the cocktails
-            // https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=Gin
-
-            using (var response = await _httpClient.GetAsync(_appSettings.filterUrl + ingredient))
+            using (var filterResponse = await _httpClient.GetAsync(_appSettings.filterUrl + ingredient))  //finding cocktails with the given ingredient 
             {
-                var listMeta = new ListMeta();
-                string apiResponse = await response.Content.ReadAsStringAsync();
-                dynamic jsonResult = JsonConvert.DeserializeObject(apiResponse);
-                listMeta.firstId = Int32.MaxValue;
-                listMeta.lastId = 0;
-                var totalIngredientcount = 0;
-                List<Cocktail> cocktails = new List<Cocktail>();
+                var listMeta = new ListMeta();   
+                string apiResponseFilter = await filterResponse.Content.ReadAsStringAsync(); 
 
-                foreach (dynamic rc in jsonResult.drinks)
+                if (IsValidJson(apiResponseFilter))
                 {
-                    // You will need to populate the cocktail details from
-                    // https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=11007
-                    using var response1 = await _httpClient.GetAsync(_appSettings.lookupUrl + rc.idDrink);
-                    string apiResponse1 = await response1.Content.ReadAsStringAsync();
-                    dynamic jsonResult1 = JValue.Parse(apiResponse1);
-                    var drink = jsonResult1.drinks[0];
-
-                    Cocktail cocktail = new Cocktail();
-                    var ingredientList = new List<string>();
-
-                    foreach (var property in drink)
+                    dynamic jsonResultFilter = JsonConvert.DeserializeObject(apiResponseFilter); // Converting Json string to dynamic object 
+                    listMeta.firstId = Int32.MaxValue;                                                      
+                    listMeta.lastId = 0;
+                    var totalIngredientcount = 0;
+                    List<Cocktail> cocktails = new List<Cocktail>();
+                    if (jsonResultFilter.drinks.Count > 0)
                     {
-                        var name = property.Name;
-                        switch (name)
+                        foreach (dynamic rc in jsonResultFilter.drinks)       //Itrating through all cocktails found
                         {
-                            case "idDrink":
-                                cocktail.Id = property.Value;
-                                break;
 
-                            case "strDrink":
-                                cocktail.Name = property.Value;
-                                break;
-                            case "strInstructions":
-                                cocktail.Instructions = property.Value;
-                                break;
-                            case "strDrinkThumb":
-                                cocktail.ImageURL = property.Value;
-                                break;
-                            default:
-                                if (name.Contains("Ingredient"))
+                            using var lookupResponse = await _httpClient.GetAsync(_appSettings.lookupUrl + rc.idDrink);  // finding drink with requested id using lookup api
+                            string apiResponseLookup = await lookupResponse.Content.ReadAsStringAsync();
+                            if (IsValidJson(apiResponseLookup))
+                            {
+                                dynamic jsonResultLookup = JsonConvert.DeserializeObject(apiResponseLookup);    //Converting Json string returned from lookup API to dynamic object
+                                var drink = jsonResultLookup.drinks[0];
+                                if (drink != null)
                                 {
-                                    var ingredientName = property.Value.ToString();
-                                    if (!String.IsNullOrEmpty(ingredientName))
+                                    Cocktail cocktail = new Cocktail();
+                                    var ingredientList = new List<string>();
+
+                                    foreach (var property in drink)   //Iterating through properties of returned object
                                     {
-                                        ingredientList.Add(ingredientName); //add value here
-                                        totalIngredientcount++;
+                                        var name = property.Name;
+                                        switch (name)                   
+                                        {
+                                            case "idDrink":
+                                                cocktail.Id = property.Value;                   // cocktail id
+                                                break;
+
+                                            case "strDrink":                                    //cocktail name
+                                                cocktail.Name = property.Value;
+                                                break;
+                                            case "strInstructions":                             // cocktail instructions   
+                                                cocktail.Instructions = property.Value;
+                                                break;
+                                            case "strDrinkThumb":                               // cocktail thumbanil 
+                                                cocktail.ImageURL = property.Value;
+                                                break;
+                                            default:
+                                                if (name.Contains("Ingredient"))                // all cocktail ingredients will be found with this case
+                                                {
+                                                    var ingredientName = property.Value.ToString();
+                                                    if (!String.IsNullOrEmpty(ingredientName))
+                                                    {
+                                                        ingredientList.Add(ingredientName);
+                                                        totalIngredientcount++;
+                                                    }
+
+                                                }
+                                                break;
+
+                                        }
                                     }
 
+                                    cocktail.Ingredients = ingredientList;
+                                    if (listMeta.firstId > cocktail.Id)
+                                    {
+                                        listMeta.firstId = cocktail.Id;
+                                    }
+                                    if (listMeta.lastId < cocktail.Id)
+                                    {
+                                        listMeta.lastId = cocktail.Id;
+                                    }
+                                    cocktails.Add(cocktail);
                                 }
-                                break;
-
+                                else
+                                {
+                                    return Ok("Lookup API couldnot find a drink with that Id ="+ rc.idDrink);
+                                }
+                                
+                            }
+                            else
+                            {
+                                return Ok("Lookup API returned data with invalid Json Format");
+                            }
                         }
+                        listMeta.count = cocktails.Count;
+                        listMeta.medianIngredientCount = (int)totalIngredientcount / listMeta.count;
+                        cocktailList.meta = listMeta;
+                        cocktailList.Cocktails = cocktails;
+                    }
+                    else
+                    {
+                        return Ok("Sorry!! No cocktails containing the request ingredient were found");
                     }
 
-                    cocktail.Ingredients = ingredientList;
-                    if (listMeta.firstId > cocktail.Id)
-                    {
-                        listMeta.firstId = cocktail.Id;
-                    }
-                    if (listMeta.lastId < cocktail.Id)
-                    {
-                        listMeta.lastId = cocktail.Id;
-                    }
-                    cocktails.Add(cocktail);
+                        
                 }
+                else
+                {
+                    return Ok("Filter API returned data with invalid Json Format");
+                }
+               
 
-                listMeta.count = cocktails.Count;
-                listMeta.medianIngredientCount = (int)totalIngredientcount / listMeta.count;
-                cocktailList.meta = listMeta;
-                cocktailList.Cocktails = cocktails;
+
+
+
             }
 
             return Ok(cocktailList);
@@ -125,8 +154,6 @@ namespace api.Controllers
         public async Task<IActionResult> GetRandom()
         {
             var cocktail = new Cocktail();
-            // TODO - Go and get a random cocktail
-            // https://www.thecocktaildb.com/api/json/v1/1/random.php
 
             using (var response = await _httpClient.GetAsync("https://www.thecocktaildb.com/api/json/v1/1/random.php"))
             {
@@ -157,7 +184,7 @@ namespace api.Controllers
                             {
                                 var ingredientName = property.Value.ToString();
                                 if (!String.IsNullOrEmpty(ingredientName))
-                                    ingredientList.Add(ingredientName); //add value here
+                                    ingredientList.Add(ingredientName);
                             }
                             break;
                     }
@@ -169,5 +196,35 @@ namespace api.Controllers
 
             return Ok(cocktail);
         }
+
+        private static bool IsValidJson(string resultString)
+        {
+            resultString = resultString.Trim();
+
+
+            if ((resultString.StartsWith("{") && resultString.EndsWith("}")) ||(resultString.StartsWith("[") && resultString.EndsWith("]")))
+            {
+                try
+                {
+                    var obj = JToken.Parse(resultString);
+                    return true;
+                }
+                catch (JsonReaderException jException)
+                {
+                    Console.WriteLine(jException.Message);
+                    return false;
+                }
+                catch (Exception e) 
+                {
+                    Console.WriteLine(e.ToString());
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
+
 }
